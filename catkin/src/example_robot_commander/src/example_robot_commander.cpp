@@ -1,5 +1,25 @@
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
+#include <queue>
+
+/* PathCoord
+ * Iteration counts and values for how the robot should move
+ */
+class PathCoord {
+	public:
+		// number of iterations for the loop
+		const int		iter;
+		// value for linear x movement
+		const float64	linear_x;
+		// value for angular z movement
+		const float64	angular_z;
+	
+		PathCoord(int i, float64 x, float64 z) :
+			iter(i),
+			linear_x(x),
+			angular_z(z) { }
+};
+
 int main(int argc, char **argv)
 {
 ros::init(argc,argv,"robot0_commander"); // name of this node 
@@ -10,7 +30,8 @@ ros::NodeHandle nh; // two lines to create a publisher object that can talk to R
 ros::Publisher cmd_publisher = nh.advertise<geometry_msgs::Twist>("/robot0/cmd_vel",1);
 // change topic to command abby...
 //ros::Publisher cmd_publisher = nh.advertise<geometry_msgs::Twist>("abby/cmd_vel",1);
-ros::Rate sleep_timer(100); //let's make a 100Hz timer
+int timer_freq = 100;
+ros::Rate sleep_timer(timer_freq); //let's make a 100Hz timer
 
 //create a variable of type "Twist", as defined in: /opt/ros/hydro/share/geometry_msgs
 // any message published on a ROS topic must have a pre-defined format, so subscribers know how to
@@ -26,40 +47,36 @@ twist_cmd.angular.x = 0.0;
 twist_cmd.angular.y = 0.0;
 twist_cmd.angular.z = 0.0;
 
-twist_cmd.linear.x = 0.4;
-
-
 // timer test...print out a message every 1 second
 ROS_INFO("count-down");
 for (int j=3;j>0;j--) {
     ROS_INFO("%d",j);
-    for (int i = 0; i<100;i++)
+    for (int i = 0; i<timer_freq;i++)
         sleep_timer.sleep();
 }
 
-int niters = 1200; //1000 iters at 100Hz is 10 seconds;
-//iteration counter; at 10ms/iteration, and 0.2m/sec, expect 2mm/iter
-// should move by 2m over 10 sec
-for (int i=0;i<niters;i++) {
-    cmd_publisher.publish(twist_cmd); // really, should only need to publish this once, but no hard done
-    sleep_timer.sleep(); // sleep for (remainder of) 10m
-}
-twist_cmd.linear.x = 0.0;
-twist_cmd.angular.z = -0.314;
-niters=500; // 5 sec
-ROS_INFO("Time to rotate negative");
-for (int i=0;i<niters;i++) {
-    cmd_publisher.publish(twist_cmd); // really, should only need to publish this once, but no hard done
-    sleep_timer.sleep(); // sleep for (remainder of) 10m
-}
-ROS_INFO("my work here is done");
-//while (ros::ok()) 
-{
-twist_cmd.linear.x = 0.0;
-twist_cmd.angular.z = 0;
-cmd_publisher.publish(twist_cmd); // and halt
+std::queue<PathCoord *> path_queue;
+
+// this memory will be freed in the loop
+path_queue.push(new PathCoord(12 * timer_freq, 0.4, 0.0)); // start with 12 seconds with linear_x at 0.4 m/sec to move 4.8 m
+path_queue.push(new PathCoord( 5 * timer_freq, 0.0, -0.314)); // 5 seconds with angular_z at -0.314 rad/sec to rotate PI/2
+// keep this coord at the end to stop movement
+path_queue.push(new PathCoord( 1, 0.0, 0.0));
+
+while (!path_queue.empty()){
+	// fetch target values
+	PathCoord *curr = path_queue.pop();
+	twist_cmd.linear.x = curr.linear_x;
+	twist_cmd.angular.z = curr.angular_z;
+	for (int i=0; i<curr.iter; i++){
+		cmd_publisher.publish(twist_cmd); // really, should only need to publish this once, but no harm done
+		sleep_timer.sleep(); // sleep for (remainder of) 1/timer_freq sec
+	}
+	// free memory
+	delete curr;
 }
 
+ROS_INFO("my work here is done");
 
 return 0;
 } 
