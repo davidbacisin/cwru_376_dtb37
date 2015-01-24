@@ -1,4 +1,5 @@
 #include <ros/ros.h>
+#include <std_msgs/Float64.h>
 #include <geometry_msgs/Twist.h>
 #include <queue>
 
@@ -10,11 +11,11 @@ class PathCoord {
 		// number of iterations for the loop
 		const int		iter;
 		// value for linear x movement
-		const float64	linear_x;
+		const float	linear_x;
 		// value for angular z movement
-		const float64	angular_z;
+		const float	angular_z;
 	
-		PathCoord(int i, float64 x, float64 z) :
+		PathCoord(int i, float x, float z) :
 			iter(i),
 			linear_x(x),
 			angular_z(z) { }
@@ -60,18 +61,21 @@ std::queue<PathCoord *> path_queue;
 // this memory will be freed in the loop
 path_queue.push(new PathCoord(12 * timer_freq, 0.4, 0.0)); // start with 12 seconds with linear_x at 0.4 m/sec to move 4.8 m
 path_queue.push(new PathCoord( 5 * timer_freq, 0.0, -0.314)); // 5 seconds with angular_z at -0.314 rad/sec to rotate PI/2
+path_queue.push(new PathCoord(24.4 * timer_freq, 0.5, 0.0)); // 24.4 seconds at 0.5 m/sec to move 12.2 m
+path_queue.push(new PathCoord( 5 * timer_freq, 0.0, -0.314)); // 5 seconds with angular_z at -0.314 rad/sec to rotate PI/2
 // keep this coord at the end to stop movement
 path_queue.push(new PathCoord( 1, 0.0, 0.0));
 
 while (!path_queue.empty()){
 	// fetch target values
-	PathCoord *curr = path_queue.pop();
-	twist_cmd.linear.x = curr.linear_x;
-	twist_cmd.angular.z = curr.angular_z;
-	for (int i=0; i<curr.iter; i++){
+	PathCoord *curr = path_queue.front();
+	twist_cmd.linear.x = curr->linear_x;
+	twist_cmd.angular.z = curr->angular_z;
+	for (int i=0; i<curr->iter; i++){
 		cmd_publisher.publish(twist_cmd); // really, should only need to publish this once, but no harm done
 		sleep_timer.sleep(); // sleep for (remainder of) 1/timer_freq sec
 	}
+	path_queue.pop();
 	// free memory
 	delete curr;
 }
