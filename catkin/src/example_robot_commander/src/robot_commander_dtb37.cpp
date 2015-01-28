@@ -52,10 +52,9 @@ private:
 		instance->odom_latest = odom_rcvd;
 		
 		// output data for debugging
-		ROS_INFO("Current odometry: x = %f, y = %f, phi = %f, v = %f, omega = %f",
+		ROS_INFO("Current odometry: x = %f, y = %f, v = %f, omega = %f",
 			odom_rcvd.pose.pose.position.x,
 			odom_rcvd.pose.pose.position.y,
-			atan2(odom_rcvd.pose.pose.orientation.z, odom_rcvd.pose.pose.orientation.w),
 			odom_rcvd.twist.twist.linear.x,
 			odom_rcvd.twist.twist.angular.z);
 	}
@@ -125,6 +124,7 @@ public:
 		PathCoord *curr;
 		nav_msgs::Odometry odom_start;
 		double v, dx, dy,
+			   roll, pitch, yaw,
 			   distance_traveled,
 			   distance_remaining;
 		while (ros::ok() &&
@@ -149,10 +149,9 @@ public:
 				// send command
 				cmd_publisher.publish(cmd_twist);
 				// update the distance traveled
-				distance_traveled = (atan2(odom_latest.pose.pose.orientation.z,
-												 odom_latest.pose.pose.orientation.w)
-										 - atan2(odom_start.pose.pose.orientation.z,
-												 odom_start.pose.pose.orientation.w));
+				tf::Matrix3x3 mat(odom_latest.pose.pose.orientation - odom_start.pose.pose.orientation);
+				mat.getRPY(roll, pitch, yaw);
+				distance_traveled = yaw;
 				distance_remaining = abs(curr->relative_heading - distance_traveled);
 				sleep_timer.sleep(); // sleep
 			}
