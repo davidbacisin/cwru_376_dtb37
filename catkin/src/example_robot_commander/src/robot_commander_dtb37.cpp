@@ -1,8 +1,6 @@
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Odometry.h>
-#include <tf/LinearMath/Quaternion.h>
-#include <tf/LinearMath/Matrix3x3.h>
 #include <queue>
 #include <math.h>
 
@@ -154,7 +152,7 @@ public:
 				cmd_publisher.publish(cmd_twist);
 				// update the distance traveled
 				distance_traveled = acos(2.0*pow(odom_latest.pose.pose.orientation.z * odom_start.pose.pose.orientation.z + odom_latest.pose.pose.orientation.w * odom_start.pose.pose.orientation.w, 2)-1.0);
-				distance_remaining = fabs(curr->relative_heading) - fabs(distance_traveled);
+				distance_remaining = fabs(curr->relative_heading) - fabs(distance_traveled) - 0.05; // subtract small value to correct for going past the target
 				ROS_INFO("Relative heading = %f, Yaw = %f, Distance remaining = %f", curr->relative_heading, distance_traveled, distance_remaining);
 				sleep_timer.sleep(); // sleep
 			}
@@ -199,8 +197,8 @@ int main(int argc, char **argv) {
 	//stdr "robot0" is expecting to receive commands on topic: /robot0/cmd_vel
 
 	PathCoord pc1(0.0, 4.8),
-			  pc2(-M_PI/2.0 + 0.05, 12.2),
-			  pc3(-M_PI/2.0 + 0.05, 8.5);
+			  pc2(-M_PI/2.0, 12.2),
+			  pc3(-M_PI/2.0, 8.5);
 			  
 	RobotCommands rc(nh);
 	rc.add(&pc1);
