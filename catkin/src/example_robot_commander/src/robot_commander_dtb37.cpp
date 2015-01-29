@@ -1,13 +1,15 @@
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Odometry.h>
+#include <tf/LinearMath/Quaternion.h>
+#include <tf/LinearMath/Matrix3x3.h>
 #include <queue>
 #include <math.h>
 
-#define V_MAX		0.8 // m/sec
+#define V_MAX		1.0 // m/sec
 #define V_MIN		0.1 // m/sec
-#define A_MAX		0.1 // m/sec^2
-#define OMEGA_MAX	1.0 // rad/sec
+#define A_MAX		0.2 // m/sec^2
+#define OMEGA_MAX	0.2 // rad/sec
 #define ALPHA_MAX	0.2 // rad/sec^2
 #define CMD_FREQ	100 // Hz
 
@@ -65,7 +67,7 @@ private:
 							const double vmax,
 							const double amax) {
 		double v,
-			distance_remaining = distance_goal - distance_traveled;
+			distance_remaining = fabs(distance_goal - distance_traveled);
 		// should we stop soon?
 		// time to halt = v / amax
 		// distance to halt = 0.5 * amax * t^2
@@ -73,13 +75,13 @@ private:
 		double distance_to_halt = 0.5 * current_twist * current_twist / amax;
 		if (distance_remaining <= distance_to_halt) { // then slow down!
 			// from equations above,
-			v = ((distance_goal > distance_traveled)? 1.0: -1.0) * sqrt(2.0 * amax * abs(distance_remaining));
+			v = ((distance_goal > distance_traveled)? 1.0: -1.0) * sqrt(2.0 * amax * distance_remaining);
 		}
 		else { // otherwise go as fast as possible
 			v = vmax;
 		}
 		// adjust v based off of current velocity so that amax is not violated
-		if ((v - current_twist) > amax * CMD_FREQ) {
+		if (fabs(v - current_twist) > amax * CMD_FREQ) {
 			v = current_twist + amax * CMD_FREQ;
 		}
 		return v;			
@@ -135,7 +137,7 @@ public:
 			odom_start = odom_latest;
 			// first, rotate to the desired heading
 			distance_traveled = 0.0;
-			distance_remaining = abs(curr->relative_heading);
+			distance_remaining = fabs(curr->relative_heading);
 			cmd_twist.linear.x = 0.0; // don't move linearly
 			while (ros::ok() &&
 				   distance_remaining > 0.0) {
@@ -144,15 +146,16 @@ public:
 									  distance_traveled,
 									  odom_latest.twist.twist.angular.z,
 									  OMEGA_MAX, ALPHA_MAX);
+				if (curr->relative_heading < 0.0)
+					v = -v;
 				ROS_INFO("Cmd omega: %f", v);
 				cmd_twist.angular.z = v;
 				// send command
 				cmd_publisher.publish(cmd_twist);
 				// update the distance traveled
-				tf::Matrix3x3 mat(odom_latest.pose.pose.orientation - odom_start.pose.pose.orientation);
-				mat.getRPY(roll, pitch, yaw);
-				distance_traveled = yaw;
-				distance_remaining = abs(curr->relative_heading - distance_traveled);
+				distance_traveled = acos(2.0*pow(odom_latest.pose.pose.orientation.z * odom_start.pose.pose.orientation.z + odom_latest.pose.pose.orientation.w * odom_start.pose.pose.orientation.w, 2)-1.0);
+				distance_remaining = fabs(curr->relative_heading) - fabs(distance_traveled);
+				ROS_INFO("Relative heading = %f, Yaw = %f, Distance remaining = %f", curr->relative_heading, distance_traveled, distance_remaining);
 				sleep_timer.sleep(); // sleep
 			}
 			// stop rotating			
@@ -180,6 +183,8 @@ public:
 				distance_remaining = curr->linear_distance - distance_traveled;
 				sleep_timer.sleep(); // sleep
 			}
+			cmd_twist.linear.x = 0.0; // stop moving
+			cmd_publisher.publish(cmd_twist);
 			// We've reached our destination, so get rid of the PathCoord
 			path_queue.pop();
 		}
@@ -194,11 +199,11 @@ int main(int argc, char **argv) {
 	//stdr "robot0" is expecting to receive commands on topic: /robot0/cmd_vel
 
 	PathCoord pc1(0.0, 4.8),
-			  pc2(-M_PI/2.0, 0.0 /*12.2*/),
-			  pc3(M_PI/2.0, 0.0);
+			  pc2(-M_PI/2.0 + 0.05, 12.2),
+			  pc3(-M_PI/2.0 + 0.05, 8.5);
 			  
 	RobotCommands rc(nh);
-	//rc.add(&pc1);
+	rc.add(&pc1);
 	rc.add(&pc2);
 	rc.add(&pc3);
 	rc.run();
