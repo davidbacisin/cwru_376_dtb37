@@ -6,9 +6,9 @@
 
 #define V_MAX		1.0 // m/sec
 #define V_MIN		0.1 // m/sec
-#define A_MAX		0.2 // m/sec^2
+#define A_MAX		0.5 // m/sec^2
 #define OMEGA_MAX	0.2 // rad/sec
-#define ALPHA_MAX	0.2 // rad/sec^2
+#define ALPHA_MAX	0.7 // rad/sec^2
 #define CMD_FREQ	100 // Hz
 
 /* PathCoord
@@ -79,8 +79,8 @@ private:
 			v = vmax;
 		}
 		// adjust v based off of current velocity so that amax is not violated
-		if (fabs(v - current_twist) > amax * CMD_FREQ) {
-			v = current_twist + amax * CMD_FREQ;
+		if (fabs(v - current_twist) > amax * odom_deltaCallback) {
+			v = current_twist + (v > current_twist? 1: -1) * amax * odom_deltaCallback;
 		}
 		return v;			
 	}
@@ -124,7 +124,6 @@ public:
 		PathCoord *curr;
 		nav_msgs::Odometry odom_start;
 		double v, dx, dy,
-			   roll, pitch, yaw,
 			   distance_traveled,
 			   distance_remaining;
 		while (ros::ok() &&
@@ -170,7 +169,7 @@ public:
 									  odom_latest.twist.twist.linear.x,
 									  V_MAX, A_MAX);
 				if (v < 0.0) v = 0.0; // let's not go backwards
-				ROS_INFO("Cmd velocity: %f; distance remaining: %f", v, distance_remaining);
+				ROS_INFO("DTcb: %f; Cmd velocity: %f; distance remaining: %f", odom_deltaCallback, v, distance_remaining);
 				cmd_twist.linear.x = v;
 				// send command
 				cmd_publisher.publish(cmd_twist);
